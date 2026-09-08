@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { FileSpreadsheet } from 'lucide-react';
+import { FileSpreadsheet, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { LoginModal } from './components/LoginModal';
 import { BackendGuideModal } from './components/BackendGuideModal';
@@ -169,6 +169,19 @@ export default function App() {
   });
 
   const [isBackendGuideOpen, setIsBackendGuideOpen] = useState(false);
+  const [toastNotification, setToastNotification] = useState<{
+    type: 'success' | 'warning' | 'info';
+    title: string;
+    message: string;
+  } | null>(null);
+
+  // Auto-hide toast after 5 seconds
+  useEffect(() => {
+    if (toastNotification) {
+      const timer = setTimeout(() => setToastNotification(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastNotification]);
 
   // Login Modal is ONLY open initially if no user is currently logged in
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(() => {
@@ -425,28 +438,67 @@ export default function App() {
     return newPatient;
   };
 
-  // Save Anamnesis Record (persists to server and local)
+  // Save Anamnesis Record (persists to server and local with 100% amarração)
   const handleSaveAnamnesis = async (record: AnamnesisRecord) => {
+    let savedRecord = { ...record };
+    let savedPatient = selectedPatient;
+
     try {
-      await api.saveAnamnesis(record);
-    } catch (err) {
+      const res = await api.saveAnamnesis(record);
+      if (res && res.anamnesis) {
+        savedRecord = {
+          ...savedRecord,
+          id: res.anamnesis.id,
+          patientId: res.anamnesis.patientId,
+          patientName: res.anamnesis.patientName || savedRecord.patientName,
+          patientEmail: res.anamnesis.patientEmail || savedRecord.patientEmail,
+          patientPhone: res.anamnesis.patientPhone || savedRecord.patientPhone,
+          createdAt: res.anamnesis.createdAt || savedRecord.createdAt
+        };
+      }
+      if (res && res.patient) {
+        savedPatient = {
+          ...res.patient,
+          createdAt: res.patient.createdAt || savedPatient?.createdAt || new Date().toISOString().split('T')[0]
+        };
+        setPatients(prev => {
+          const filtered = prev.filter(p => p.id !== res.patient.id && p.email.toLowerCase() !== res.patient.email.toLowerCase() && p.id !== record.patientId);
+          return [savedPatient!, ...filtered];
+        });
+        setSelectedPatient(savedPatient);
+      }
+      setToastNotification({
+        type: 'success',
+        title: 'Anamnese Gravada com Sucesso!',
+        message: `A ficha clínica de ${savedRecord.patientName || 'paciente'} foi salva e amarrada 100% no banco de dados da Dra. Yasmin.`
+      });
+    } catch (err: any) {
       console.warn('Backend save anamnesis fallback:', err);
+      setToastNotification({
+        type: 'warning',
+        title: 'Anamnese Salva Localmente',
+        message: 'A ficha foi salva no dispositivo. O servidor reportou: ' + (err.message || 'modo offline')
+      });
     }
 
     setAnamnesisRecords(prev => {
-      const existsIndex = prev.findIndex(a => a.id === record.id || a.patientId === record.patientId);
+      const existsIndex = prev.findIndex(a => 
+        a.id === savedRecord.id || 
+        a.patientId === savedRecord.patientId ||
+        (a.patientEmail && savedRecord.patientEmail && a.patientEmail.toLowerCase() === savedRecord.patientEmail.toLowerCase())
+      );
       if (existsIndex >= 0) {
         const copy = [...prev];
-        copy[existsIndex] = record;
+        copy[existsIndex] = savedRecord;
         return copy;
       }
-      return [record, ...prev];
+      return [savedRecord, ...prev];
     });
 
     // Update patient sessions and last visit
-    if (selectedPatient) {
+    if (savedPatient) {
       setPatients(prev => prev.map(p => {
-        if (p.id === selectedPatient.id) {
+        if (p.id === savedPatient!.id || (savedPatient!.email && p.email.toLowerCase() === savedPatient!.email.toLowerCase())) {
           return {
             ...p,
             totalSessions: (p.totalSessions || 0) + 1,
@@ -534,7 +586,10 @@ export default function App() {
     : (selectedPatient || undefined);
 
   const currentPatientRecord = currentPatientContext
-    ? (anamnesisRecords.find(a => a.patientId === currentPatientContext.id) ||
+    ? (anamnesisRecords.find(a => 
+        a.patientId === currentPatientContext.id || 
+        (a.patientEmail && currentPatientContext.email && a.patientEmail.toLowerCase() === currentPatientContext.email.toLowerCase())
+      ) ||
        (currentUser?.role === 'PATIENT' && anamnesisRecords.length > 0 ? anamnesisRecords[0] : undefined))
     : undefined;
 
@@ -544,6 +599,36 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col selection:bg-teal-100 selection:text-teal-950 font-sans">
+      {/* Toast Notification */}
+      {toastNotification && (
+        <div className="fixed top-4 right-4 z-50 max-w-md w-full animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className={`p-4 rounded-xl shadow-lg border flex items-start gap-3 ${
+            toastNotification.type === 'success' 
+              ? 'bg-teal-900 border-teal-700 text-white' 
+              : toastNotification.type === 'warning'
+              ? 'bg-amber-900 border-amber-700 text-white'
+              : 'bg-slate-900 border-slate-700 text-white'
+          }`}>
+            {toastNotification.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-teal-300 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-amber-300 shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold leading-tight">{toastNotification.title}</p>
+              <p className="text-[11px] text-teal-100/90 mt-0.5 leading-relaxed">{toastNotification.message}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setToastNotification(null)}
+              className="text-white/70 hover:text-white transition p-1 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Navigation */}
       <Navbar
         currentUser={currentUser}

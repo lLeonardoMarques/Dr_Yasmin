@@ -16,7 +16,8 @@ import {
   CheckCircle2,
   Sliders,
   ChevronLeft,
-  RotateCcw
+  RotateCcw,
+  Loader2
 } from 'lucide-react';
 import { 
   Patient, 
@@ -33,7 +34,7 @@ interface AnamnesisWizardProps {
   questions: AnamnesisQuestion[];
   categories: AnamnesisCategory[];
   doctorName: string;
-  onSaveAnamnesis: (record: AnamnesisRecord) => void;
+  onSaveAnamnesis: (record: AnamnesisRecord) => void | Promise<void>;
   onCancel: () => void;
   initialRecord?: AnamnesisRecord;
 }
@@ -48,6 +49,7 @@ export function AnamnesisWizard({
   initialRecord
 }: AnamnesisWizardProps) {
   // Answers state
+  const [isSaving, setIsSaving] = useState(false);
   const [answers, setAnswers] = useState<Record<string, any>>(initialRecord?.answers || {});
   const [selectedBodyAreas, setSelectedBodyAreas] = useState<BodyAreaSelection[]>(
     initialRecord?.bodyAreas || []
@@ -162,27 +164,32 @@ export function AnamnesisWizard({
   };
 
   // Final save
-  const handleSaveFinal = () => {
-    const finalRecord: AnamnesisRecord = {
-      id: initialRecord?.id || `anam-${Date.now()}`,
-      patientId: patient.id,
-      patientName: patient.name,
-      patientEmail: patient.email,
-      patientPhone: patient.phone,
-      createdAt: initialRecord?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      doctorName: doctorName || 'Dra. Yasmin Oliveira',
-      status: 'concluido',
-      answers,
-      bodyAreas: selectedBodyAreas,
-      pressurePreference,
-      mainObjective: mainObjective || answers['q_objetivo_principal'] || 'Bem-estar e estética corporal',
-      detectedAlerts,
-      clinicalObservations: doctorNotes || answers['q_observacoes_dra'] || 'Avaliação corporal e anamnese concluídas com sucesso.',
-      recommendedTechniques
-    };
+  const handleSaveFinal = async () => {
+    setIsSaving(true);
+    try {
+      const finalRecord: AnamnesisRecord = {
+        id: initialRecord?.id || `anam-${Date.now()}`,
+        patientId: patient.id,
+        patientName: patient.name,
+        patientEmail: patient.email,
+        patientPhone: patient.phone,
+        createdAt: initialRecord?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        doctorName: doctorName || 'Dra. Yasmin Oliveira',
+        status: 'concluido',
+        answers,
+        bodyAreas: selectedBodyAreas,
+        pressurePreference,
+        mainObjective: mainObjective || answers['q_objetivo_principal'] || 'Bem-estar e estética corporal',
+        detectedAlerts,
+        clinicalObservations: doctorNotes || answers['q_observacoes_dra'] || 'Avaliação corporal e anamnese concluídas com sucesso.',
+        recommendedTechniques
+      };
 
-    onSaveAnamnesis(finalRecord);
+      await onSaveAnamnesis(finalRecord);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Progress percentage
@@ -711,11 +718,21 @@ export function AnamnesisWizard({
 
               <button
                 type="button"
+                disabled={isSaving}
                 onClick={handleSaveFinal}
-                className="flex items-center gap-2 px-6 py-2.5 text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-xl shadow-xs transition cursor-pointer"
+                className="flex items-center gap-2 px-6 py-2.5 text-xs font-semibold bg-teal-600 hover:bg-teal-700 disabled:bg-teal-400 text-white rounded-xl shadow-xs transition cursor-pointer disabled:cursor-not-allowed"
               >
-                <Save className="w-4 h-4" />
-                <span>Salvar Ficha no Perfil do Paciente</span>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Gravando no Banco de Dados...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Salvar Ficha no Perfil do Paciente</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

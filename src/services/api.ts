@@ -269,10 +269,14 @@ export const api = {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
+          id: record.id,
           patientId: record.patientId,
+          patientName: record.patientName,
+          patientEmail: record.patientEmail,
+          patientPhone: record.patientPhone,
           doctorName: record.doctorName || 'Dra. Yasmin Oliveira',
           pressurePreference: record.pressurePreference || 'Média / Terapêutica',
-          mainObjective: record.mainObjective,
+          mainObjective: record.mainObjective || 'Bem-estar e estética corporal',
           bodyAreas: record.bodyAreas || [],
           answers: record.answers || {},
           detectedAlerts: record.detectedAlerts || [],
@@ -303,20 +307,23 @@ export const api = {
       const data = await response.json();
       console.log('📡 All anamneses response:', data);
       
-      if (data.success) {
+      if (data.success && Array.isArray(data.records)) {
         return data.records.map((a: any) => ({
           id: a._id || a.id,
           patientId: a.patientId,
-          doctorName: a.doctorName,
-          pressurePreference: a.pressurePreference,
-          mainObjective: a.mainObjective,
+          patientName: a.patientName || '',
+          patientEmail: a.patientEmail || '',
+          patientPhone: a.patientPhone || '',
+          doctorName: a.doctorName || 'Dra. Yasmin Oliveira',
+          pressurePreference: a.pressurePreference || 'Média / Terapêutica',
+          mainObjective: a.mainObjective || 'Bem-estar e estética corporal',
           bodyAreas: a.bodyAreas || [],
           answers: a.answers || {},
           detectedAlerts: a.detectedAlerts || [],
           clinicalObservations: a.clinicalObservations || '',
           recommendedTechniques: a.recommendedTechniques || [],
           status: a.status || 'concluido',
-          createdAt: a.createdAt
+          createdAt: a.createdAt || new Date().toISOString()
         }));
       }
       return [];
@@ -479,7 +486,23 @@ export const api = {
       const data = await response.json();
       console.log('📡 My anamneses response:', data);
       if (data.success && Array.isArray(data.records)) {
-        return data.records;
+        return data.records.map((a: any) => ({
+          id: a._id || a.id,
+          patientId: a.patientId,
+          patientName: a.patientName || '',
+          patientEmail: a.patientEmail || '',
+          patientPhone: a.patientPhone || '',
+          doctorName: a.doctorName || 'Dra. Yasmin Oliveira',
+          pressurePreference: a.pressurePreference || 'Média / Terapêutica',
+          mainObjective: a.mainObjective || 'Bem-estar e estética corporal',
+          bodyAreas: a.bodyAreas || [],
+          answers: a.answers || {},
+          detectedAlerts: a.detectedAlerts || [],
+          clinicalObservations: a.clinicalObservations || '',
+          recommendedTechniques: a.recommendedTechniques || [],
+          status: a.status || 'concluido',
+          createdAt: a.createdAt || new Date().toISOString()
+        }));
       }
       return [];
     } catch (error) {
