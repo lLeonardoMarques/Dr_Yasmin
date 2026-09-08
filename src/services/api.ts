@@ -714,6 +714,80 @@ export const api = {
     }
   },
 
+  // ---------- PENDING USERS & PATIENTS (APROVAÇÃO PELA DOUTORA) ----------
+  getPendingPatients: async () => {
+    try {
+      console.log('📤 Buscando pacientes pendentes em:', `${API_BASE_URL}/patients/pending`);
+      const response = await fetch(`${API_BASE_URL}/patients/pending`, {
+        headers: getHeaders()
+      });
+      const data = await response.json();
+      console.log('📡 Pending patients response:', data);
+      if (data.success && Array.isArray(data.patients)) {
+        return data.patients;
+      }
+      return [];
+    } catch (error) {
+      console.error('❌ GetPendingPatients error:', error);
+      return [];
+    }
+  },
+
+  approvePatient: async (id: string) => {
+    try {
+      console.log('📤 Aprovando paciente em:', `${API_BASE_URL}/patients/approve/${id}`);
+      const response = await fetch(`${API_BASE_URL}/patients/approve/${id}`, {
+        method: 'POST',
+        headers: getHeaders()
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Erro ao aprovar paciente');
+      }
+      return data;
+    } catch (error: any) {
+      console.error('❌ ApprovePatient error:', error);
+      throw error;
+    }
+  },
+
+  rejectPatient: async (id: string) => {
+    try {
+      console.log('📤 Rejeitando paciente em:', `${API_BASE_URL}/patients/reject/${id}`);
+      const response = await fetch(`${API_BASE_URL}/patients/reject/${id}`, {
+        method: 'POST',
+        headers: getHeaders()
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Erro ao rejeitar paciente');
+      }
+      return data;
+    } catch (error: any) {
+      console.error('❌ RejectPatient error:', error);
+      throw error;
+    }
+  },
+
+  linkPatient: async (payload: { email: string; patientId: string; userId: string }) => {
+    try {
+      console.log('📤 Vinculando paciente em:', `${API_BASE_URL}/patients/link`);
+      const response = await fetch(`${API_BASE_URL}/patients/link`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Erro ao vincular paciente');
+      }
+      return data;
+    } catch (error: any) {
+      console.error('❌ LinkPatient error:', error);
+      throw error;
+    }
+  },
+
   // ---------- HEALTH ----------
   health: async () => {
     try {

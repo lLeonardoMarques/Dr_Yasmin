@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { FileSpreadsheet, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { FileSpreadsheet, CheckCircle2, AlertCircle, X, Clock, ShieldCheck, RefreshCw } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { LoginModal } from './components/LoginModal';
 import { BackendGuideModal } from './components/BackendGuideModal';
@@ -14,6 +14,7 @@ import { PatientRecordView } from './components/PatientRecordView';
 import { PatientPortal } from './components/PatientPortal';
 import { AppointmentsManager } from './components/AppointmentsManager';
 import { AnamnesisFormEditor } from './components/AnamnesisFormEditor';
+import { PendingUsersManager } from './components/PendingUsersManager';
 
 import { 
   User, 
@@ -21,7 +22,8 @@ import {
   AnamnesisRecord, 
   AnamnesisQuestion, 
   Appointment, 
-  EvolutionSession 
+  EvolutionSession,
+  PendingPatientUser 
 } from './types';
 
 import { 
@@ -146,6 +148,9 @@ export default function App() {
     return [];
   });
 
+  // 7. Pending Users waiting for Dra. Yasmin's approval
+  const [pendingUsers, setPendingUsers] = useState<PendingPatientUser[]>([]);
+
   // Navigation State - persists across F5 / page reloads
   const [activeView, setActiveView] = useState<string>(() => {
     const savedView = localStorage.getItem('toque_active_view');
@@ -256,10 +261,11 @@ export default function App() {
 
     try {
       if (currentUser.role === 'DOCTOR') {
-        const [serverPatients, serverApps, serverAnamneses] = await Promise.all([
+        const [serverPatients, serverApps, serverAnamneses, serverPending] = await Promise.all([
           api.getPatients(),
           api.getAllAppointments(),
-          api.getAllAnamneses()
+          api.getAllAnamneses(),
+          api.getPendingPatients()
         ]);
 
         // When records are deleted in MongoDB, serverPatients won't contain them
@@ -273,7 +279,23 @@ export default function App() {
         if (Array.isArray(serverAnamneses)) {
           setAnamnesisRecords(serverAnamneses);
         }
+        if (Array.isArray(serverPending)) {
+          setPendingUsers(serverPending);
+        }
       } else {
+        // Re-check current user approval state from server
+        try {
+          const meRes = await api.getMe();
+          if (meRes && meRes.user) {
+            if (meRes.user.status !== currentUser.status || meRes.user.isApproved !== currentUser.isApproved) {
+              setCurrentUser(meRes.user);
+              api.setSavedUser(meRes.user);
+            }
+          }
+        } catch {
+          // Keep offline state
+        }
+
         const [myProfile, myRecords, myApps] = await Promise.all([
           api.getMyPatientProfile(),
           api.getMyAnamneses(),
@@ -369,8 +391,19 @@ export default function App() {
   };
 
   const handleRegisterPatient = (patientData: { name: string; email: string; phone: string; password?: string }): User => {
+    const cleanEmail = patientData.email.trim().toLowerCase();
+    const cleanPhoneDigits = patientData.phone.replace(/\D/g, '');
+
+    // Check if matches an existing patient registered previously by Dra. Yasmin (email and phone match)
+    const matchedPatient = patients.find(p => {
+      const emailMatches = p.email && p.email.trim().toLowerCase() === cleanEmail;
+      const phoneMatches = p.phone && p.phone.replace(/\D/g, '') === cleanPhoneDigits;
+      return emailMatches && phoneMatches;
+    });
+
+    const isDirectMatch = !!matchedPatient;
     const newUserId = `user-${Date.now()}`;
-    const newPatientId = `pat-${Date.now()}`;
+    const newPatientId = matchedPatient ? matchedPatient.id : `pat-${Date.now()}`;
 
     const newUser: User = {
       id: newUserId,
@@ -379,26 +412,124 @@ export default function App() {
       phone: patientData.phone,
       role: 'PATIENT',
       password: patientData.password || '123456',
+      status: isDirectMatch ? 'ativo' : 'pending',
+      isApproved: isDirectMatch,
       createdAt: new Date().toISOString().split('T')[0]
     };
 
-    const newPatient: Patient = {
-      id: newPatientId,
-      userId: newUserId,
-      name: patientData.name,
-      email: patientData.email,
-      phone: patientData.phone,
-      status: 'ativo',
-      treatmentType: 'Massoterapia e Estética Corporal',
-      totalSessions: 0,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
+    if (isDirectMatch) {
+      // Direct access because Dra. Yasmin already registered this patient
+      setPatients(prev => prev.map(p => p.id === matchedPatient.id ? { ...p, userId: newUserId } : p));
+      setSelectedPatient({ ...matchedPatient, userId: newUserId });
+    } else {
+      // Pending user waiting for approval
+      const newPending: PendingPatientUser = {
+        id: newUserId,
+        userId: newUserId,
+        name: patientData.name,
+        email: patientData.email,
+        phone: patientData.phone,
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      };
+      setPendingUsers(prev => [newPending, ...prev]);
+
+      const newPatient: Patient = {
+        id: newPatientId,
+        userId: newUserId,
+        name: patientData.name,
+        email: patientData.email,
+        phone: patientData.phone,
+        status: 'pendente',
+        treatmentType: 'Massoterapia e Estética Corporal',
+        totalSessions: 0,
+        createdAt: new Date().toISOString().split('T')[0]
+      };
+      setPatients(prev => [newPatient, ...prev]);
+      setSelectedPatient(newPatient);
+    }
 
     setRegisteredUsers(prev => [...prev, newUser]);
-    setPatients(prev => [newPatient, ...prev]);
-    setSelectedPatient(newPatient);
-
     return newUser;
+  };
+
+  // Approve a pending user (Dra. Yasmin)
+  const handleApprovePendingUser = async (id: string) => {
+    try {
+      setIsSyncing(true);
+      await api.approvePatient(id);
+      setToastNotification({
+        type: 'success',
+        title: 'Paciente Aprovado!',
+        message: 'Acesso liberado com sucesso. O paciente agora tem permissão para acessar o prontuário e anexar exames.'
+      });
+      await syncDataFromServer(true);
+    } catch (err: any) {
+      console.error('Erro ao aprovar usuário:', err);
+      // Fallback local update
+      setPendingUsers(prev => prev.filter(p => p.id !== id && p.userId !== id));
+      setPatients(prev => prev.map(p => (p.userId === id || p.id === id) ? { ...p, status: 'ativo' } : p));
+      setRegisteredUsers(prev => prev.map(u => u.id === id ? { ...u, status: 'ativo', isApproved: true } : u));
+      setToastNotification({
+        type: 'success',
+        title: 'Paciente Aprovado',
+        message: 'Acesso liberado localmente.'
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Reject a pending user (Dra. Yasmin)
+  const handleRejectPendingUser = async (id: string) => {
+    try {
+      setIsSyncing(true);
+      await api.rejectPatient(id);
+      setToastNotification({
+        type: 'info',
+        title: 'Solicitação Recusada',
+        message: 'O cadastro do usuário foi recusado com sucesso.'
+      });
+      await syncDataFromServer(true);
+    } catch (err: any) {
+      console.error('Erro ao recusar usuário:', err);
+      // Fallback local update
+      setPendingUsers(prev => prev.filter(p => p.id !== id && p.userId !== id));
+      setToastNotification({
+        type: 'info',
+        title: 'Solicitação Recusada',
+        message: 'Cadastro removido da lista de pendentes.'
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Link pending user with an existing patient profile
+  const handleLinkPendingUser = async (email: string, patientId: string, userId: string) => {
+    try {
+      setIsSyncing(true);
+      await api.linkPatient({ email, patientId, userId });
+      setToastNotification({
+        type: 'success',
+        title: 'Fichas Vinculadas!',
+        message: 'O usuário foi unificado ao histórico clínico existente com sucesso.'
+      });
+      await syncDataFromServer(true);
+    } catch (err: any) {
+      console.error('Erro ao vincular usuário:', err);
+      // Fallback local update
+      setPendingUsers(prev => prev.filter(p => p.userId !== userId && p.email !== email));
+      setPatients(prev => prev.map(p => p.id === patientId ? { ...p, userId, email } : p));
+      setRegisteredUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'ativo', isApproved: true } : u));
+      setToastNotification({
+        type: 'success',
+        title: 'Fichas Vinculadas',
+        message: 'Histórico unificado com sucesso.'
+      });
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Add new patient from Dra. Yasmin panel (persists to server and local)
@@ -561,7 +692,7 @@ export default function App() {
   };
 
   // Update Appointment Status (persists to server and local)
-  const handleUpdateAppointmentStatus = async (id: string, status: 'confirmado' | 'realizado' | 'cancelado') => {
+  const handleUpdateAppointmentStatus = async (id: string, status: 'pendente' | 'confirmado' | 'realizado' | 'cancelado') => {
     try {
       await api.updateAppointmentStatus(id, status);
     } catch (err) {
@@ -639,6 +770,7 @@ export default function App() {
         onOpenLogin={() => setIsLoginModalOpen(true)}
         onSync={() => syncDataFromServer(false)}
         isSyncing={isSyncing}
+        pendingCount={pendingUsers.length}
       />
 
       {/* Main App Container */}
@@ -661,6 +793,21 @@ export default function App() {
             onSync={() => syncDataFromServer(false)}
             isSyncing={isSyncing}
             onDeletePatient={handleDeletePatient}
+            pendingCount={pendingUsers.length}
+            onNavigatePendingUsers={() => setActiveView('pending-users')}
+          />
+        )}
+
+        {/* VIEW: PENDING PATIENTS MANAGER (Exclusive to Dra. Yasmin) */}
+        {currentUser?.role === 'DOCTOR' && activeView === 'pending-users' && (
+          <PendingUsersManager
+            pendingUsers={pendingUsers}
+            existingPatients={patients}
+            onApprove={handleApprovePendingUser}
+            onReject={handleRejectPendingUser}
+            onLink={handleLinkPendingUser}
+            onRefresh={() => syncDataFromServer(false)}
+            isLoading={isSyncing}
           />
         )}
 
@@ -760,8 +907,58 @@ export default function App() {
           />
         )}
 
-        {/* VIEW 6: PATIENT PORTAL (Restricted to Patient) */}
-        {currentUser?.role === 'PATIENT' && currentPatientContext && (
+        {/* VIEW: PATIENT WAITING APPROVAL SCREEN */}
+        {currentUser?.role === 'PATIENT' && (currentUser.status === 'pending' || currentUser.isApproved === false) && (
+          <div className="max-w-xl mx-auto my-8 p-8 bg-white rounded-3xl border border-amber-200/90 shadow-sm text-center space-y-6">
+            <div className="w-16 h-16 rounded-2xl bg-amber-100/80 text-amber-600 flex items-center justify-center mx-auto shadow-2xs">
+              <Clock className="w-8 h-8 animate-pulse" />
+            </div>
+            <div className="space-y-2">
+              <span className="inline-block px-3 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-full">
+                Cadastro em Análise
+              </span>
+              <h2 className="text-2xl font-bold text-stone-900 font-serif-luxury">
+                Aguardando Aprovação da Dra. Yasmin
+              </h2>
+              <p className="text-sm text-stone-600 leading-relaxed max-w-md mx-auto">
+                Olá, <strong>{currentUser.name}</strong>! Recebemos sua solicitação de acesso com sucesso. Por motivos de segurança e sigilo profissional dos prontuários médicos, seu cadastro está aguardando liberação da Dra. Yasmin.
+              </p>
+            </div>
+
+            <div className="bg-stone-50 border border-stone-200/80 rounded-2xl p-4 text-xs text-stone-600 space-y-2 text-left">
+              <p className="font-semibold text-stone-800 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                Assim que seu acesso for liberado, você poderá:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-stone-600">
+                <li>Visualizar sua ficha de anamnese e histórico de atendimentos</li>
+                <li>Anexar fotos, laudos e exames diretamente ao seu prontuário</li>
+                <li>Solicitar agendamento de novas consultas e sessões</li>
+              </ul>
+            </div>
+
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                onClick={() => syncDataFromServer(false)}
+                disabled={isSyncing}
+                className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>{isSyncing ? 'Verificando...' : 'Verificar Aprovação Agora'}</span>
+              </button>
+
+              <button
+                onClick={handleLogout}
+                className="w-full sm:w-auto px-4 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-semibold transition cursor-pointer"
+              >
+                Sair / Trocar Usuário
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* VIEW 6: PATIENT PORTAL (Restricted to Approved Patient) */}
+        {currentUser?.role === 'PATIENT' && currentUser.status !== 'pending' && currentUser.isApproved !== false && currentPatientContext && (
           <PatientPortal
             currentPatient={currentPatientContext}
             patientRecord={currentPatientRecord}
@@ -775,7 +972,7 @@ export default function App() {
                 service,
                 date,
                 time,
-                status: 'agendado',
+                status: 'pendente', // Consultas marcadas por pacientes ficam pendentes para aprovação da Dra.
                 notes,
                 durationMinutes: 60
               });

@@ -18,7 +18,7 @@ import { CLINIC_SERVICES } from '../data/mockData';
 interface AppointmentsManagerProps {
   appointments: Appointment[];
   patients: Patient[];
-  onUpdateStatus: (appointmentId: string, newStatus: 'confirmado' | 'realizado' | 'cancelado') => void;
+  onUpdateStatus: (appointmentId: string, newStatus: 'pendente' | 'confirmado' | 'realizado' | 'cancelado') => void;
   onAddAppointment: (appointment: Omit<Appointment, 'id'>) => void;
 }
 
@@ -118,7 +118,8 @@ export function AppointmentsManager({
             className="w-full sm:w-44 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700"
           >
             <option value="todos">Todos os Status</option>
-            <option value="agendado">Aguardando Confirmação</option>
+            <option value="pendente">Pendentes de Confirmação</option>
+            <option value="agendado">Solicitados</option>
             <option value="confirmado">Confirmados</option>
             <option value="realizado">Realizados</option>
             <option value="cancelado">Cancelados</option>
@@ -148,10 +149,11 @@ export function AppointmentsManager({
                     <h3 className="font-bold text-slate-900 text-base">{app.patientName}</h3>
                     <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full border ${
                       app.status === 'confirmado' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
-                      app.status === 'agendado' ? 'bg-amber-50 text-amber-800 border-amber-200' :
+                      (app.status === 'pendente' || app.status === 'agendado') ? 'bg-amber-50 text-amber-800 border-amber-200' :
                       app.status === 'realizado' ? 'bg-teal-50 text-teal-800 border-teal-200' : 'bg-rose-50 text-rose-800 border-rose-200'
                     }`}>
                       {app.status === 'confirmado' ? 'Confirmado' :
+                       app.status === 'pendente' ? 'Pendente de Aprovação' :
                        app.status === 'agendado' ? 'Solicitado pelo Paciente' :
                        app.status === 'realizado' ? 'Realizado' : 'Cancelado'}
                     </span>
@@ -171,13 +173,13 @@ export function AppointmentsManager({
 
               {/* Status Action Buttons */}
               <div className="flex items-center gap-2">
-                {app.status === 'agendado' && (
+                {(app.status === 'pendente' || app.status === 'agendado') && (
                   <button
                     onClick={() => onUpdateStatus(app.id, 'confirmado')}
                     className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition cursor-pointer shadow-xs"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Confirmar</span>
+                    <span>Aprovar Consulta</span>
                   </button>
                 )}
 

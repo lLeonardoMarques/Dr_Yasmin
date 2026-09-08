@@ -53,6 +53,7 @@ export function LoginModal({
   const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
   const [regError, setRegError] = useState('');
   const [regSuccess, setRegSuccess] = useState(false);
+  const [regSuccessMessage, setRegSuccessMessage] = useState('');
 
   // Forgot password state
   const [forgotEmail, setForgotEmail] = useState('');
@@ -154,9 +155,14 @@ export function LoginModal({
 
       if (res && res.user) {
         setRegSuccess(true);
+        if (res.user.status === 'pending' || res.user.isApproved === false) {
+          setRegSuccessMessage('Cadastro recebido! Seu acesso está aguardando liberação da Dra. Yasmin.');
+        } else {
+          setRegSuccessMessage('Cadastro concluído com sucesso! Acessando sua conta...');
+        }
         setTimeout(() => {
           onLogin(res.user);
-        }, 900);
+        }, 1200);
         return;
       }
     } catch (err: any) {
@@ -175,9 +181,14 @@ export function LoginModal({
           password: regPassword
         });
         setRegSuccess(true);
+        if (newUser.status === 'pending' || newUser.isApproved === false) {
+          setRegSuccessMessage('Cadastro recebido! Seu acesso está aguardando liberação da Dra. Yasmin.');
+        } else {
+          setRegSuccessMessage('Cadastro concluído com sucesso! Acessando sua conta...');
+        }
         setTimeout(() => {
           onLogin(newUser);
-        }, 900);
+        }, 1200);
       } catch {
         setRegError(err.message || 'Erro ao cadastrar. Tente novamente.');
       }
@@ -371,7 +382,7 @@ export function LoginModal({
               {regSuccess && (
                 <div className="p-3 bg-emerald-50/90 border border-emerald-200/90 text-emerald-900 rounded-2xl text-xs flex items-center gap-2 font-semibold shadow-2xs">
                   <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                  <span>Cadastro concluído! Acessando sua conta...</span>
+                  <span>{regSuccessMessage || 'Cadastro concluído! Acessando sua conta...'}</span>
                 </div>
               )}
 

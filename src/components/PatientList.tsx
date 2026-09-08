@@ -17,7 +17,11 @@ import {
   X,
   FileDown,
   RefreshCw,
-  Trash2
+  Trash2,
+  LayoutGrid,
+  List as ListIcon,
+  Users,
+  ArrowRight
 } from 'lucide-react';
 import { Patient, AnamnesisRecord } from '../types';
 import { exportAnamnesisToWord } from '../utils/exportUtils';
@@ -31,6 +35,8 @@ interface PatientListProps {
   onSync?: () => void;
   isSyncing?: boolean;
   onDeletePatient?: (id: string) => void;
+  pendingCount?: number;
+  onNavigatePendingUsers?: () => void;
 }
 
 export function PatientList({
@@ -41,12 +47,22 @@ export function PatientList({
   onAddNewPatient,
   onSync,
   isSyncing,
-  onDeletePatient
+  onDeletePatient,
+  pendingCount = 0,
+  onNavigatePendingUsers
 }: PatientListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [treatmentFilter, setTreatmentFilter] = useState<string>('todos');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
+    return (localStorage.getItem('toque_patient_view_mode') as 'cards' | 'list') || 'cards';
+  });
+
+  const handleToggleViewMode = (mode: 'cards' | 'list') => {
+    setViewMode(mode);
+    localStorage.setItem('toque_patient_view_mode', mode);
+  };
 
   // New Patient Form State
   const [newName, setNewName] = useState('');
@@ -265,11 +281,71 @@ export function PatientList({
         )}
       </div>
 
-      {/* Patient Cards Grid */}
+      {/* Pending Users Notification Banner */}
+      {pendingCount > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <Clock className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-amber-950">
+                {pendingCount} {pendingCount === 1 ? 'novo usuário aguardando' : 'novos usuários aguardando'} aprovação
+              </h4>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Novos cadastros criados pelo portal aguardam liberação para poderem agendar consultas e acessar prontuários.
+              </p>
+            </div>
+          </div>
+          {onNavigatePendingUsers && (
+            <button
+              onClick={onNavigatePendingUsers}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-sm shrink-0 active:scale-95"
+            >
+              <span>Revisar Solicitações</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Patient List Header with View Mode Toggle */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between text-xs text-stone-500 px-1">
-          <span>Mostrando {filteredPatients.length} de {patients.length} pacientes</span>
-          <span>Especialidade: Massoterapia & Estética Corporal</span>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-stone-500 px-1">
+          <div className="flex items-center gap-2">
+            <span>Mostrando {filteredPatients.length} de {patients.length} pacientes</span>
+            <span className="hidden sm:inline">•</span>
+            <span className="hidden sm:inline">Especialidade: Massoterapia & Estética Corporal</span>
+          </div>
+
+          {/* View Mode Toggle: Cards vs List */}
+          <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl border border-stone-200 self-start sm:self-auto">
+            <button
+              type="button"
+              onClick={() => handleToggleViewMode('cards')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                viewMode === 'cards'
+                  ? 'bg-white text-stone-900 shadow-xs font-semibold'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cartões</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleToggleViewMode('list')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition ${
+                viewMode === 'list'
+                  ? 'bg-white text-stone-900 shadow-xs font-semibold'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <ListIcon className="w-3.5 h-3.5" />
+              <span>Lista / Tabela</span>
+            </button>
+          </div>
         </div>
 
         {filteredPatients.length === 0 ? (
@@ -286,7 +362,168 @@ export function PatientList({
               Cadastrar Paciente Agora
             </button>
           </div>
+        ) : viewMode === 'list' ? (
+          /* TABLE / LIST VIEW */
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3.5">Paciente</th>
+                    <th className="px-4 py-3.5">Contato</th>
+                    <th className="px-4 py-3.5">Procedimento / Queixa</th>
+                    <th className="px-4 py-3.5 text-center">Sessões</th>
+                    <th className="px-4 py-3.5">Status</th>
+                    <th className="px-4 py-3.5">Anamnese</th>
+                    <th className="px-4 py-3.5 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredPatients.map((patient) => {
+                    const latestAnamnesis = anamnesisRecords.find(a => a.patientId === patient.id);
+                    const hasAlerts = latestAnamnesis && latestAnamnesis.detectedAlerts && latestAnamnesis.detectedAlerts.length > 0;
+
+                    return (
+                      <tr 
+                        key={patient.id} 
+                        className="hover:bg-slate-50/80 transition group cursor-pointer"
+                        onClick={() => onSelectPatient(patient)}
+                      >
+                        {/* Paciente */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-800 font-bold text-sm shrink-0 group-hover:bg-teal-50 group-hover:text-teal-700 transition">
+                              {patient.name.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-900 group-hover:text-teal-900 transition">
+                                {patient.name}
+                              </p>
+                              {patient.occupation && (
+                                <p className="text-[11px] text-slate-400 truncate max-w-[150px]">
+                                  {patient.occupation}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Contato */}
+                        <td className="px-4 py-3">
+                          <div className="space-y-0.5">
+                            <p className="flex items-center gap-1 text-slate-800 font-medium">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              {patient.phone}
+                            </p>
+                            <p className="flex items-center gap-1 text-slate-500 text-[11px]">
+                              <Mail className="w-3 h-3 text-slate-400" />
+                              <span className="truncate max-w-[140px]">{patient.email}</span>
+                            </p>
+                          </div>
+                        </td>
+
+                        {/* Tratamento */}
+                        <td className="px-4 py-3">
+                          <span className="text-teal-800 font-medium bg-teal-50/80 border border-teal-200/80 px-2 py-0.5 rounded-md text-[11px]">
+                            {patient.treatmentType || 'Massoterapia'}
+                          </span>
+                        </td>
+
+                        {/* Sessões */}
+                        <td className="px-4 py-3 text-center">
+                          <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                            {patient.totalSessions || 0}
+                          </span>
+                        </td>
+
+                        {/* Status */}
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                            patient.status === 'ativo' ? 'bg-teal-50 text-teal-800 border border-teal-200' :
+                            patient.status === 'retorno_pendente' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
+                            'bg-slate-100 text-slate-600 border border-slate-200'
+                          }`}>
+                            {patient.status === 'ativo' ? 'Ativo' :
+                             patient.status === 'retorno_pendente' ? 'Retorno' : 'Inativo'}
+                          </span>
+                        </td>
+
+                        {/* Anamnese */}
+                        <td className="px-4 py-3">
+                          {latestAnamnesis ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="flex items-center gap-1 text-[11px] font-semibold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                                <CheckCircle2 className="w-3 h-3 text-teal-600" />
+                                Ok
+                              </span>
+                              {hasAlerts && (
+                                <span className="flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200" title="Possui alerta clínico">
+                                  <AlertCircle className="w-3 h-3 text-amber-600" />
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              Pendente
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Ações */}
+                        <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1.5">
+                            {latestAnamnesis && (
+                              <button
+                                onClick={() => exportAnamnesisToWord(latestAnamnesis, patient)}
+                                className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
+                                title="Exportar Word (.doc)"
+                              >
+                                <FileDown className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => onStartAnamnesisForPatient(patient)}
+                              className="px-2.5 py-1 text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg transition flex items-center gap-1"
+                              title="Iniciar Anamnese"
+                            >
+                              <FileSpreadsheet className="w-3 h-3" />
+                              <span className="hidden sm:inline">Anamnese</span>
+                            </button>
+
+                            <button
+                              onClick={() => onSelectPatient(patient)}
+                              className="px-2.5 py-1 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-xs transition flex items-center gap-1"
+                            >
+                              <span>Prontuário</span>
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+
+                            {onDeletePatient && (
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Deseja realmente excluir ${patient.name}?`)) {
+                                    onDeletePatient(patient.id);
+                                  }
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                title="Excluir paciente"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : (
+          /* CARDS VIEW */
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {filteredPatients.map((patient) => {
               const latestAnamnesis = anamnesisRecords.find(a => a.patientId === patient.id);

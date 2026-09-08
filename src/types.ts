@@ -7,6 +7,8 @@ export interface User {
   phone: string;
   role: UserRole;
   password?: string;
+  status?: 'pending' | 'approved' | 'rejected' | 'ativo';
+  isApproved?: boolean;
   avatarUrl?: string;
   createdAt: string;
 }
@@ -39,13 +41,32 @@ export interface Patient {
   emergencyContact?: string;
   emergencyPhone?: string;
   address?: string;
-  status: 'ativo' | 'inativo' | 'retorno_pendente' | 'aguardando_aprovacao';
+  status: 'ativo' | 'inativo' | 'retorno_pendente' | 'aguardando_aprovacao' | 'pendente';
   treatmentType: string;
   totalSessions: number;
   lastVisit?: string;
   createdAt: string;
   notes?: string;
   exams?: MedicalExam[];
+}
+
+export interface PendingPatientUser {
+  id: string;
+  userId?: string | null;
+  name: string;
+  email: string;
+  phone: string;
+  status: string;
+  treatmentType?: string;
+  exams?: MedicalExam[];
+  createdAt: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    status: string;
+  } | null;
 }
 
 export interface QuestionOption {
@@ -119,7 +140,7 @@ export interface Appointment {
   service: string;
   date: string;
   time: string;
-  status: 'agendado' | 'confirmado' | 'realizado' | 'cancelado';
+  status: 'pendente' | 'agendado' | 'confirmado' | 'realizado' | 'cancelado';
   notes?: string;
   durationMinutes: number;
   price?: number;

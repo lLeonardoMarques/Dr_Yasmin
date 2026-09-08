@@ -9,7 +9,8 @@ import {
   LogOut, 
   User as UserIcon,
   CalendarPlus,
-  RefreshCw
+  RefreshCw,
+  UserCheck
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -22,6 +23,7 @@ interface NavbarProps {
   onOpenLogin: () => void;
   onSync?: () => void;
   isSyncing?: boolean;
+  pendingCount?: number;
 }
 
 export function Navbar({
@@ -32,7 +34,8 @@ export function Navbar({
   onLogout,
   onOpenLogin,
   onSync,
-  isSyncing
+  isSyncing,
+  pendingCount = 0
 }: NavbarProps) {
   const isDoctor = currentUser?.role === 'DOCTOR';
 
@@ -86,6 +89,24 @@ export function Navbar({
                   >
                     <Users className="w-3.5 h-3.5 text-teal-600 shrink-0" />
                     <span className="whitespace-nowrap">Pacientes</span>
+                  </button>
+
+                  <button
+                    onClick={() => onNavigate('pending-users')}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl transition cursor-pointer whitespace-nowrap shrink-0 ${
+                      activeView === 'pending-users'
+                        ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                    }`}
+                    title="Aprovação de novos pacientes pendentes"
+                  >
+                    <UserCheck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span className="whitespace-nowrap">Pendentes</span>
+                    {pendingCount > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-amber-500 text-white animate-pulse">
+                        {pendingCount}
+                      </span>
+                    )}
                   </button>
 
                   <button
@@ -235,6 +256,19 @@ export function Navbar({
                   }`}
                 >
                   Pacientes
+                </button>
+                <button
+                  onClick={() => onNavigate('pending-users')}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg shrink-0 whitespace-nowrap flex items-center gap-1.5 ${
+                    activeView === 'pending-users' ? 'bg-amber-100 text-amber-950 border border-amber-300 font-bold' : 'text-slate-600'
+                  }`}
+                >
+                  <span>Pendentes</span>
+                  {pendingCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-500 text-white">
+                      {pendingCount}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => onNavigate('new-anamnesis')}
